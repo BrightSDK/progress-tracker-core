@@ -1,0 +1,36 @@
+{
+  "name": "brd-ono-util-progress-tracker-core",
+  "version": "1.0.0",
+  "description": "Core utility for tracking progress of multi-step operations with estimated durations",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/*.test.js",
+    "test:watch": "mocha test/*.test.js --watch",
+    "coverage": "nyc mocha test/*.test.js"
+  },
+  "keywords": [
+    "progress",
+    "tracker",
+    "core",
+    "utility"
+  ],
+  "files": [
+    "index.js",
+    "src/",
+    "LICENSE"
+  ],
+  "dependencies": {
+  },
+  "peerDependencies": {
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "nyc": "^15.1.0",
+    "proxyquire": "^2.1.3",
+    "sinon": "^15.0.1"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
