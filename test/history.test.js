@@ -107,9 +107,12 @@ describe('History Manager', function() {
     it('should limit history samples to the latest 10', function() {
       // Setup history with 10 samples
       const samples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-      fsStub.readFileSync.returns(JSON.stringify({
-        'fullStep': { samples, avgRatio: 1.0 }
-      }));
+      const mockHistory = {
+        'fullStep': { samples, avgRatio: 1.0, runId: '123' },
+        runSessionId: '456' // Different runId to force adding a new sample
+      };
+
+      fsStub.readFileSync.returns(JSON.stringify(mockHistory));
 
       historyManager = createHistoryManager();
       historyManager.updateStepDuration('fullStep', 11, 11);
@@ -131,6 +134,86 @@ describe('History Manager', function() {
       historyManager.updateStepDuration('anotherStep', 5, undefined);
       // Should handle undefined actual durations
       expect(historyManager.hasHistoryForStep('anotherStep')).to.be.true;
+    });
+
+    it('should track steps per run session and not duplicate samples within a run', function() {
+      // Start with empty history
+      fsStub.readFileSync.returns(JSON.stringify({
+        runSessionId: '123'
+      }));
+
+      historyManager = createHistoryManager({ debug: true });
+
+      // First update a step - should add a new sample
+      historyManager.updateStepDuration('step1', 10, 8);
+
+      // Force writeFileSync to store the history for later reading
+      const savedData = {};
+      fsStub.writeFileSync.callsFake((path, data) => {
+        savedData.lastSaved = JSON.parse(data);
+      });
+
+      // Update the same step again in the same run - should update existing sample
+      historyManager.updateStepDuration('step1', 10, 9);
+
+      // Verify that step1 has only one sample
+      const firstStepHistory = historyManager.getAllStepHistory().find(h => h.name === 'step1');
+      expect(firstStepHistory.samples).to.have.lengthOf(1);
+      expect(firstStepHistory.average).to.equal(9); // Updated to new value
+
+      // Simulate a new run by manually changing the runSessionId
+      const newHistory = JSON.parse(JSON.stringify(savedData.lastSaved));
+      newHistory.runSessionId = 'new-session-' + Date.now();
+      fsStub.readFileSync.returns(JSON.stringify(newHistory));
+
+      // Create a new history manager with the updated history
+      const newHistoryManager = createHistoryManager({ debug: true });
+
+      // Update the same step in a "new run" - should add a new sample
+      newHistoryManager.updateStepDuration('step1', 10, 7);
+
+      // Verify that step1 now has two samples
+      const newStepHistory = newHistoryManager.getAllStepHistory().find(h => h.name === 'step1');
+      expect(newStepHistory.samples).to.have.lengthOf(2);
+      expect(newStepHistory.samples).to.include(9); // First run's sample
+      expect(newStepHistory.samples).to.include(7); // New run's sample
+    });
+
+    it('should properly clean history by resetting in-memory data', function() {
+      // Setup initial history with data
+      const initialHistory = {
+        runSessionId: '123',
+        'step1': {
+          samples: [1, 2, 3],
+          avgRatio: 1.0,
+          runId: '123'
+        }
+      };
+
+      fsStub.readFileSync.returns(JSON.stringify(initialHistory));
+      historyManager = createHistoryManager({ debug: true });
+
+      // Verify initial state
+      const initialStepHistory = historyManager.getAllStepHistory();
+      expect(initialStepHistory.length).to.equal(1);
+
+      // Clean history - this should reset the in-memory state
+      const result = historyManager.cleanHistory();
+      expect(result.success).to.be.true;
+
+      // Verify there is no history data left after cleaning
+      const postCleanHistory = historyManager.getAllStepHistory();
+      expect(postCleanHistory.length).to.equal(0);
+
+      // Adding a step after cleaning should start fresh
+      historyManager.updateStepDuration('step1', 10, 5);
+
+      // Verify the new step was added properly
+      const newStepHistory = historyManager.getAllStepHistory();
+      expect(newStepHistory.length).to.equal(1);
+      expect(newStepHistory[0].name).to.equal('step1');
+      expect(newStepHistory[0].samples).to.have.lengthOf(1);
+      expect(newStepHistory[0].samples[0]).to.equal(5);
     });
   });
 

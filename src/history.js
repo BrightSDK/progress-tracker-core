@@ -118,14 +118,39 @@ function createHistoryManager(options = {}) {
             if (!stepDurationHistory[stepName]) {
                 stepDurationHistory[stepName] = {
                     samples: [],
-                    avgRatio: 1.0
+                    avgRatio: 1.0,
+                    runId: null // Track the current run
                 };
             }
 
-            // Add the new sample (limit to last 10 samples to maintain reasonable history size)
-            stepDurationHistory[stepName].samples.push(actualDuration);
-            if (stepDurationHistory[stepName].samples.length > 10) {
-                stepDurationHistory[stepName].samples.shift(); // Remove oldest sample
+            // Generate a unique run ID for this session if needed
+            if (!stepDurationHistory.runSessionId) {
+                stepDurationHistory.runSessionId = Date.now().toString();
+            }
+
+            // Check if this step has already been recorded for the current run
+            // If so, update the existing sample instead of adding a new one
+            if (stepDurationHistory[stepName].runId === stepDurationHistory.runSessionId) {
+                const lastIndex = stepDurationHistory[stepName].samples.length - 1;
+                // Update the most recent sample instead of adding a new one
+                if (lastIndex >= 0) {
+                    stepDurationHistory[stepName].samples[lastIndex] = actualDuration;
+                    if (debug) {
+                        console.log(`Updated existing sample for step "${stepName}": actual=${actualDuration.toFixed(1)}s`);
+                    }
+                } else {
+                    // Should never happen, but just in case
+                    stepDurationHistory[stepName].samples.push(actualDuration);
+                }
+            } else {
+                // Add the new sample for a new run (limit to last 10 samples)
+                stepDurationHistory[stepName].samples.push(actualDuration);
+                if (stepDurationHistory[stepName].samples.length > 10) {
+                    stepDurationHistory[stepName].samples.shift(); // Remove oldest sample
+                }
+
+                // Mark this step as recorded for the current run
+                stepDurationHistory[stepName].runId = stepDurationHistory.runSessionId;
             }
 
             // Calculate new average ratio
@@ -156,12 +181,24 @@ function createHistoryManager(options = {}) {
          * @returns {Object} History data for all steps
          */
         getAllStepHistory: () => {
-            return Object.keys(stepDurationHistory).map(name => ({
-                name,
-                samples: stepDurationHistory[name].samples,
-                average: stepDurationHistory[name].samples.reduce((a,b) => a+b, 0) /
-                         stepDurationHistory[name].samples.length
-            }));
+            return Object.keys(stepDurationHistory)
+                // Filter out non-step properties like runSessionId
+                .filter(key => stepDurationHistory[key] &&
+                               typeof stepDurationHistory[key] === 'object' &&
+                               Array.isArray(stepDurationHistory[key].samples))
+                .map(name => {
+                    // Handle case where samples might be empty
+                    const samples = stepDurationHistory[name].samples || [];
+                    const average = samples.length > 0
+                        ? samples.reduce((a,b) => a+b, 0) / samples.length
+                        : 0;
+
+                    return {
+                        name,
+                        samples,
+                        average
+                    };
+                });
         },
 
         /**
@@ -170,12 +207,16 @@ function createHistoryManager(options = {}) {
          * @returns {Object|null} History info or null if no history
          */
         getStepHistoryInfo: (stepName) => {
-            if (!stepDurationHistory[stepName]) return null;
+            if (!stepDurationHistory[stepName] ||
+                !Array.isArray(stepDurationHistory[stepName].samples) ||
+                stepDurationHistory[stepName].samples.length === 0) {
+                return null;
+            }
 
+            const samples = stepDurationHistory[stepName].samples;
             return {
-                historyAverage: stepDurationHistory[stepName].samples.reduce((a,b) => a+b, 0) /
-                               stepDurationHistory[stepName].samples.length,
-                samples: stepDurationHistory[stepName].samples.length
+                historyAverage: samples.reduce((a,b) => a+b, 0) / samples.length,
+                samples: samples.length
             };
         },
 
@@ -200,6 +241,10 @@ function createHistoryManager(options = {}) {
             try {
                 if (fs.existsSync(fileToClean)) {
                     fs.unlinkSync(fileToClean);
+                    // Also reset the in-memory history if we're cleaning the current app
+                    if (nameToClean === name) {
+                        stepDurationHistory = {};
+                    }
                     return {
                         success: true,
                         message: `Successfully deleted history file: ${fileToClean}`,

@@ -104,6 +104,41 @@ describe('Progress Tracker Core', function() {
       const result = progressTracker.completeStep('nonExistentStep');
       expect(result.progress).to.equal(0);
     });
+
+    it('should properly update history with run session tracking', function() {
+      // Make historyManagerStub.updateStepDuration return usable values
+      historyManagerStub.updateStepDuration.returns(true);
+
+      // Start with a fresh tracker
+      progressTracker = createProgressTrackerCore({ name: 'test-app' });
+      progressTracker.start();
+
+      // Update and complete a step
+      const stepName = 'tracked-step';
+      progressTracker.updateStep({ name: stepName, endPercentage: 50 });
+      Date.now.returns(5000); // 4 seconds elapsed
+      progressTracker.completeStep(stepName);
+
+      // History should be updated for the run session
+      expect(historyManagerStub.updateStepDuration.called).to.be.true;
+
+      // Reset call history for clear verification of next call
+      historyManagerStub.updateStepDuration.resetHistory();
+
+      // Update the same step again - should still be the same run session
+      progressTracker.updateStep({ name: stepName, endPercentage: 60 });
+      Date.now.returns(8000); // 3 more seconds elapsed
+      progressTracker.completeStep(stepName);
+
+      // Should call history update again
+      expect(historyManagerStub.updateStepDuration.called).to.be.true;
+
+      // Verify the second call included the correct parameters
+      const callArgs = historyManagerStub.updateStepDuration.getCall(0).args;
+      expect(callArgs[0]).to.equal(stepName);
+      expect(typeof callArgs[1]).to.equal('number'); // Should be a duration
+      expect(typeof callArgs[2]).to.equal('number'); // Should be a duration
+    });
   });
 
   describe('Progress Tracking', function() {
@@ -209,6 +244,21 @@ describe('Progress Tracker Core', function() {
       const result = progressTracker.cleanHistory('test-app');
       expect(result.success).to.be.true;
       expect(historyManagerStub.cleanHistory.calledWith('test-app')).to.be.true;
+    });
+
+    it('should handle history cleaning and reset in-memory state', function() {
+      const result = progressTracker.cleanHistory('test-app');
+      expect(result.success).to.be.true;
+      expect(historyManagerStub.cleanHistory.calledWith('test-app')).to.be.true;
+
+      // Check that after cleaning, when we start a new run, it creates a new session
+      progressTracker.start();
+      progressTracker.updateStep({ name: 'new-step', endPercentage: 50 });
+      Date.now.returns(2000); // 1 second elapsed
+      progressTracker.completeStep('new-step');
+
+      // Should call history update with a fresh session
+      expect(historyManagerStub.updateStepDuration.calledOnce).to.be.true;
     });
 
     it('should provide history information', function() {

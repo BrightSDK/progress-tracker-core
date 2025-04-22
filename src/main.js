@@ -56,7 +56,21 @@ function createProgressTrackerCore(options = {}) {
         const elapsedMs = now - startTime;
         if (elapsedMs <= 0) return null;
 
-        // Calculate remaining time in seconds
+        // If we have completed at least one step, we can provide a more accurate ETA
+        if (completedSteps.length > 0) {
+            // Get the first completed step for reference
+            const firstStep = completedSteps[0];
+            const stepConfig = stepConfigs.find(s => s.name === firstStep.name);
+
+            if (stepConfig) {
+                const percentCovered = stepConfig.endPercentage - (stepConfig.startPercentage || 0);
+                const timePerPercent = firstStep.actualDuration / percentCovered;
+                const remainingPercentage = 100 - currentProgress;
+                return Math.round(remainingPercentage * timePerPercent);
+            }
+        }
+
+        // Fall back to simple calculation if no completed steps
         const remainingPercentage = 100 - currentProgress;
         const msPerPercent = elapsedMs / currentProgress;
         const estimatedRemainingSeconds = Math.round((msPerPercent * remainingPercentage) / 1000);
@@ -244,10 +258,14 @@ function createProgressTrackerCore(options = {}) {
             // Record completion time of the step if it's the current step
             if (currentStep && currentStep.name === stepName) {
                 const actualDuration = (Date.now() - currentStep.startTime) / 1000;
+
+                // Add to completedSteps, ensuring we have proper metadata
                 completedSteps.push({
                     name: stepName,
                     estimatedDuration: stepConfig.duration,
-                    actualDuration: actualDuration
+                    actualDuration: actualDuration,
+                    startPercentage: stepConfig.startPercentage || 0,
+                    endPercentage: stepConfig.endPercentage
                 });
 
                 // Safely get original duration, falling back to the regular duration
@@ -321,10 +339,10 @@ function createProgressTrackerCore(options = {}) {
                 currentProgress = calculatedPercentage;
             }
 
-            // Only calculate ETA if we have history data
+            // Calculate ETA if we have history data OR at least one completed step
             let etaSeconds = null;
             let etaString = '';
-            if (stepConfig.hasHistoryData) {
+            if (stepConfig.hasHistoryData || completedSteps.length > 0) {
                 etaSeconds = calculateETA();
                 etaString = etaSeconds !== null ? formatTimeDisplay(etaSeconds) : '';
             }
@@ -334,7 +352,7 @@ function createProgressTrackerCore(options = {}) {
                 status: stepConfig.label || currentStep.name,
                 etaSeconds,
                 etaString,
-                hasHistoryData: stepConfig.hasHistoryData,
+                hasHistoryData: stepConfig.hasHistoryData || completedSteps.length > 0,
             };
         },
 
