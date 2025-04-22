@@ -1,6 +1,6 @@
 {
   "name": "brd-ono-util-progress-tracker-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Core utility for tracking progress of multi-step operations with estimated durations",
   "main": "index.js",
   "scripts": {
