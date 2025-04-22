@@ -287,6 +287,32 @@ function createHistoryManager(options = {}) {
         },
 
         /**
+         * Reset the current session ID to ensure next run creates new samples
+         */
+        resetSession: () => {
+            // Reset the runSessionId to force new samples on next run
+            if (stepDurationHistory) {
+                stepDurationHistory.runSessionId = null;
+
+                if (debug) {
+                    console.log('Reset session ID to ensure new samples on next run');
+                }
+
+                // Save updated history
+                if (historyFilePath) {
+                    try {
+                        fs.writeFileSync(historyFilePath, JSON.stringify(stepDurationHistory, null, 2), 'utf8');
+                        if (debug) {
+                            console.log(`Saved updated session state to ${historyFilePath}`);
+                        }
+                    } catch (error) {
+                        console.warn(`Warning: Could not save updated session state: ${error.message}`);
+                    }
+                }
+            }
+        },
+
+        /**
          * Get the base directory for history files
          * @returns {string} Directory path
          */
