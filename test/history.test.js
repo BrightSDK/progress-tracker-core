@@ -5,53 +5,54 @@ const sinon = require('sinon');
 const proxyquire = require('proxyquire');
 const path = require('path');
 
-describe('Progress Tracker - History Manager', function() {
+describe('Progress Tracker - History Manager', function () {
   // Stubs for fs, path, and os modules
   let fsStub, pathStub, osStub;
   let createHistoryManager, historyManager;
 
-  beforeEach(function() {
+  beforeEach(function () {
     // Set up filesystem stub
     fsStub = {
       existsSync: sinon.stub().returns(true),
       mkdirSync: sinon.stub(),
       readFileSync: sinon.stub().returns('{}'),
       writeFileSync: sinon.stub(),
-      unlinkSync: sinon.stub()
+      unlinkSync: sinon.stub(),
+      statSync: sinon.stub().returns({ size: 100 }),
     };
 
     // Set up path stub
     pathStub = {
       join: path.join,
-      dirname: path.dirname
+      dirname: path.dirname,
     };
 
     // Set up os stub
     osStub = {
-      tmpdir: sinon.stub().returns('/tmp')
+      tmpdir: sinon.stub().returns('/tmp'),
     };
 
     // Create the module with our stubs
     createHistoryManager = proxyquire('../src/history', {
-      'fs': fsStub,
-      'path': pathStub,
-      'os': osStub,
-      '../package.json': { name: 'test-package' }
+      fs: fsStub,
+      path: pathStub,
+      os: osStub,
+      '../package.json': { name: 'test-package' },
     });
 
     // Create a history manager instance with debug enabled
     historyManager = createHistoryManager({
       name: 'test-app',
-      debug: true
+      debug: true,
     });
   });
 
-  afterEach(function() {
+  afterEach(function () {
     sinon.restore();
   });
 
-  describe('Initialization', function() {
-    it('should create a history manager with expected methods', function() {
+  describe('Initialization', function () {
+    it('should create a history manager with expected methods', function () {
       expect(historyManager).to.be.an('object');
       expect(historyManager.getHistoryFilePath).to.be.a('function');
       expect(historyManager.hasHistoryForStep).to.be.a('function');
@@ -61,18 +62,18 @@ describe('Progress Tracker - History Manager', function() {
       expect(historyManager.cleanHistory).to.be.a('function');
     });
 
-    it('should create directory if it does not exist', function() {
+    it('should create directory if it does not exist', function () {
       fsStub.existsSync.returns(false);
 
       historyManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       expect(fsStub.mkdirSync.called).to.be.true;
     });
 
-    it('should handle errors during directory creation', function() {
+    it('should handle errors during directory creation', function () {
       fsStub.existsSync.returns(false);
       fsStub.mkdirSync.throws(new Error('Permission denied'));
 
@@ -81,47 +82,50 @@ describe('Progress Tracker - History Manager', function() {
 
       historyManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       expect(consoleWarnStub.called).to.be.true;
-      expect(consoleWarnStub.args[0][0]).to.include('Could not create stats directory');
+      expect(consoleWarnStub.args[0][0]).to.include(
+        'Could not create stats directory',
+      );
     });
   });
 
-  describe('Step History Management', function() {
-    it('should check if history exists for a step', function() {
+  describe('Step History Management', function () {
+    it('should check if history exists for a step', function () {
       // Setup existing step in history
       const historyData = {
         'test-step': {
-          samples: [5.1]
-        }
+          samples: [5.1],
+        },
       };
       fsStub.readFileSync.returns(JSON.stringify(historyData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       expect(testHistoryManager.hasHistoryForStep('test-step')).to.be.true;
-      expect(testHistoryManager.hasHistoryForStep('non-existent-step')).to.be.false;
+      expect(testHistoryManager.hasHistoryForStep('non-existent-step')).to.be
+        .false;
     });
 
-    it('should get estimated duration from history', function() {
+    it('should get estimated duration from history', function () {
       // Setup step with history data
       const historyData = {
         'test-step': {
-          samples: [5.0, 5.2, 5.4]
-        }
+          samples: [5.0, 5.2, 5.4],
+        },
       };
       fsStub.readFileSync.returns(JSON.stringify(historyData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       // With 70% history and 30% configured, expect ~5.2 * 0.7 + 10 * 0.3 = ~6.64
@@ -129,12 +133,15 @@ describe('Progress Tracker - History Manager', function() {
       expect(duration).to.be.approximately(6.6, 0.5);
     });
 
-    it('should return configured duration when no history exists', function() {
-      const duration = historyManager.getEstimatedDuration('non-existent-step', 8);
+    it('should return configured duration when no history exists', function () {
+      const duration = historyManager.getEstimatedDuration(
+        'non-existent-step',
+        8,
+      );
       expect(duration).to.equal(8);
     });
 
-    it('should handle invalid history data', function() {
+    it('should handle invalid history data', function () {
       // Setup corrupted history data
       fsStub.readFileSync.returns('{"corrupted":');
 
@@ -143,8 +150,8 @@ describe('Progress Tracker - History Manager', function() {
     });
   });
 
-  describe('Session Management', function() {
-    it('should update step duration and track session ID', function() {
+  describe('Session Management', function () {
+    it('should update step duration and track session ID', function () {
       // Setup initial step data
       fsStub.readFileSync.returns('{}');
 
@@ -159,7 +166,9 @@ describe('Progress Tracker - History Manager', function() {
       expect(writtenData).to.have.property('runSessionId');
       expect(writtenData).to.have.property('step1');
       expect(writtenData.step1).to.have.property('samples').that.includes(8);
-      expect(writtenData.step1).to.have.property('runId').that.equals(writtenData.runSessionId);
+      expect(writtenData.step1)
+        .to.have.property('runId')
+        .that.equals(writtenData.runSessionId);
 
       // Store the runSessionId for next test
       const sessionId = writtenData.runSessionId;
@@ -179,14 +188,14 @@ describe('Progress Tracker - History Manager', function() {
       expect(secondWrittenData).to.have.property('step2');
     });
 
-    it('should reset session ID', function() {
+    it('should reset session ID', function () {
       // Setup initial data with session ID
       const initialData = {
         runSessionId: '12345',
         step1: {
           samples: [5],
-          runId: '12345'
-        }
+          runId: '12345',
+        },
       };
 
       fsStub.readFileSync.returns(JSON.stringify(initialData));
@@ -202,7 +211,7 @@ describe('Progress Tracker - History Manager', function() {
       expect(writtenData.runSessionId).to.be.null;
     });
 
-    it('should handle errors during session reset', function() {
+    it('should handle errors during session reset', function () {
       // Make writeFileSync throw an error
       fsStub.writeFileSync.throws(new Error('Write error'));
 
@@ -210,14 +219,14 @@ describe('Progress Tracker - History Manager', function() {
       expect(() => historyManager.resetSession()).not.to.throw();
     });
 
-    it('should maintain sample history across resets', function() {
+    it('should maintain sample history across resets', function () {
       // Setup history with existing samples
       const initialData = {
         runSessionId: '12345',
         step1: {
           samples: [5, 6, 7],
-          runId: '12345'
-        }
+          runId: '12345',
+        },
       };
 
       fsStub.readFileSync.returns(JSON.stringify(initialData));
@@ -225,7 +234,7 @@ describe('Progress Tracker - History Manager', function() {
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       // Reset session
@@ -240,23 +249,23 @@ describe('Progress Tracker - History Manager', function() {
     });
   });
 
-  describe('Sample Management', function() {
-    it('should accumulate samples up to maximum limit', function() {
+  describe('Sample Management', function () {
+    it('should accumulate samples up to maximum limit', function () {
       // Setup initial data with 9 samples (one less than max)
       const samples = [1, 2, 3, 4, 5, 6, 7, 8, 9];
       const initialData = {
         runSessionId: null,
         step1: {
           samples: samples,
-          runId: null
-        }
+          runId: null,
+        },
       };
       fsStub.readFileSync.returns(JSON.stringify(initialData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       // Add a new sample
@@ -272,22 +281,22 @@ describe('Progress Tracker - History Manager', function() {
       expect(writtenData.step1.samples[0]).to.equal(1); // First sample preserved
     });
 
-    it('should update existing sample if in same run session', function() {
+    it('should update existing sample if in same run session', function () {
       // Setup data with existing run session
       const sessionId = Date.now().toString();
       const initialData = {
         runSessionId: sessionId,
         step1: {
           samples: [5],
-          runId: sessionId
-        }
+          runId: sessionId,
+        },
       };
       fsStub.readFileSync.returns(JSON.stringify(initialData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       // Update same step in same session
@@ -301,22 +310,22 @@ describe('Progress Tracker - History Manager', function() {
       expect(writtenData.step1.samples[0]).to.equal(7); // Updated value
     });
 
-    it('should add new sample after resetting session', function() {
+    it('should add new sample after resetting session', function () {
       // Setup initial data
-      const initialSessionId = "old-session";
+      const initialSessionId = 'old-session';
       const initialData = {
         runSessionId: initialSessionId,
         step1: {
           samples: [5],
-          runId: initialSessionId
-        }
+          runId: initialSessionId,
+        },
       };
       fsStub.readFileSync.returns(JSON.stringify(initialData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       // Reset session
@@ -340,22 +349,22 @@ describe('Progress Tracker - History Manager', function() {
     });
   });
 
-  describe('History Cleaning', function() {
-    it('should clean history for the specified app', function() {
+  describe('History Cleaning', function () {
+    it('should clean history for the specified app', function () {
       const result = historyManager.cleanHistory('test-app');
 
       expect(result.success).to.be.true;
       expect(fsStub.unlinkSync.called).to.be.true;
     });
 
-    it('should clean current app history if no app specified', function() {
+    it('should clean current app history if no app specified', function () {
       const result = historyManager.cleanHistory();
 
       expect(result.success).to.be.true;
       expect(fsStub.unlinkSync.called).to.be.true;
     });
 
-    it('should handle errors during history cleaning', function() {
+    it('should handle errors during history cleaning', function () {
       fsStub.unlinkSync.throws(new Error('Permission denied'));
 
       const result = historyManager.cleanHistory();
@@ -364,7 +373,7 @@ describe('Progress Tracker - History Manager', function() {
       expect(result.message).to.include('Error deleting history file');
     });
 
-    it('should handle non-existent history file', function() {
+    it('should handle non-existent history file', function () {
       fsStub.existsSync.returns(false);
 
       const result = historyManager.cleanHistory();
@@ -374,30 +383,30 @@ describe('Progress Tracker - History Manager', function() {
     });
   });
 
-  describe('History Info', function() {
-    it('should get history directory', function() {
+  describe('History Info', function () {
+    it('should get history directory', function () {
       const dir = historyManager.getHistoryDirectory();
       expect(dir).to.equal('/tmp/test-package');
     });
 
-    it('should get history file path', function() {
+    it('should get history file path', function () {
       const filePath = historyManager.getHistoryFilePath();
       expect(filePath).to.include('test-app-history.json');
     });
 
-    it('should get all step history', function() {
+    it('should get all step history', function () {
       // Setup history data with steps
       const historyData = {
         runSessionId: null,
         step1: { samples: [1, 2, 3] },
-        step2: { samples: [4, 5] }
+        step2: { samples: [4, 5] },
       };
       fsStub.readFileSync.returns(JSON.stringify(historyData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       const allHistory = testHistoryManager.getAllStepHistory();
@@ -408,18 +417,18 @@ describe('Progress Tracker - History Manager', function() {
       expect(allHistory[1].name).to.be.oneOf(['step1', 'step2']);
     });
 
-    it('should get specific step history info', function() {
+    it('should get specific step history info', function () {
       // Setup history data with step
       const historyData = {
         runSessionId: null,
-        step1: { samples: [1, 2, 3] }
+        step1: { samples: [1, 2, 3] },
       };
       fsStub.readFileSync.returns(JSON.stringify(historyData));
 
       // Create a new instance that will use our mocked history data
       const testHistoryManager = createHistoryManager({
         name: 'test-app',
-        debug: true
+        debug: true,
       });
 
       const stepInfo = testHistoryManager.getStepHistoryInfo('step1');
@@ -429,7 +438,7 @@ describe('Progress Tracker - History Manager', function() {
       expect(stepInfo.samples).to.equal(3);
     });
 
-    it('should return null for non-existent step history', function() {
+    it('should return null for non-existent step history', function () {
       const stepInfo = historyManager.getStepHistoryInfo('non-existent');
       expect(stepInfo).to.be.null;
     });

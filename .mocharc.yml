@@ -1,0 +1,5 @@
+require:
+  - test/setup.js
+timeout: 5000
+recursive: true
+spec: 'test/**/*.test.js'

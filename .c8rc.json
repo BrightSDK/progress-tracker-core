@@ -1,0 +1,7 @@
+{
+  "all": true,
+  "src": ["src"],
+  "exclude": ["tests/**", "test/**", "coverage/**"],
+  "reporter": ["text", "lcov", "html"],
+  "check-coverage": false
+}
