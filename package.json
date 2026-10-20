@@ -1,6 +1,7 @@
 {
-  "name": "brd-ono-util-progress-tracker-core",
-  "version": "1.0.2",
+  "name": "@brightdata/bright-sdk-progress-tracker-core",
+  "version": "1.1.0",
+  "private": true,
   "description": "Core utility for tracking progress of multi-step operations with estimated durations",
   "main": "index.js",
   "scripts": {
